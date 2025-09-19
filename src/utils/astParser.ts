@@ -1,7 +1,9 @@
 // AST Node Types
-export type NodeType = 'program' | 'function' | 'expression' | 'binary_op' | 'unary_op' | 
-                      'identifier' | 'constant' | 'keyword' | 'operator' | 'statement' |
-                      'if_statement' | 'return_statement' | 'assignment' | 'call_expression';
+export type NodeType = 'program' | 'function' | 'declarations' | 'statements' | 'expression' | 
+                      'binary_op' | 'unary_op' | 'identifier' | 'constant' | 'keyword' | 
+                      'operator' | 'statement' | 'declaration' | 'if_statement' | 'while_statement' |
+                      'for_statement' | 'return_statement' | 'assignment' | 'call_expression' |
+                      'variable_declaration' | 'function_declaration' | 'parameter_list';
 
 export interface ASTNode {
   id: string;
@@ -150,34 +152,83 @@ function parseExpressionTokens(tokens: string[]): ASTNode | null {
   return parseAddSub();
 }
 
-// Simple code parser for basic syntax
+// Main code parser for proper hierarchical AST
 export function parseCode(input: string, language: string): ASTNode {
   nodeIdCounter = 0;
-  const lines = input.split('\n').filter(line => line.trim());
   
   if (language === 'expression') {
-    return parseExpression(input);
+    const exprNode = parseExpression(input);
+    // Wrap expression in program structure
+    const programNode = createNode('program', 'Program', 'keyword', []);
+    const expressionsNode = createNode('statements', 'Expressions', 'keyword', [exprNode]);
+    programNode.children.push(expressionsNode);
+    return programNode;
   }
   
+  const lines = input.split('\n').filter(line => line.trim());
   const programNode = createNode('program', `${language.toUpperCase()} Program`, 'keyword', []);
+  
+  // Parse and categorize all statements
+  const declarations: ASTNode[] = [];
+  const statements: ASTNode[] = [];
+  const functions: ASTNode[] = [];
   
   for (const line of lines) {
     const trimmedLine = line.trim();
     if (!trimmedLine || trimmedLine.startsWith('//') || trimmedLine.startsWith('#')) continue;
     
-    const statementNode = parseStatement(trimmedLine, language);
-    if (statementNode) {
-      programNode.children.push(statementNode);
+    const parsed = parseStatement(trimmedLine, language);
+    if (parsed) {
+      if (parsed.type === 'function_declaration') {
+        functions.push(parsed);
+      } else if (parsed.type === 'variable_declaration') {
+        declarations.push(parsed);
+      } else {
+        statements.push(parsed);
+      }
     }
+  }
+  
+  // Create hierarchical structure
+  if (functions.length > 0) {
+    functions.forEach(func => programNode.children.push(func));
+  }
+  
+  if (declarations.length > 0) {
+    const declNode = createNode('declarations', 'Declarations', 'keyword', declarations);
+    programNode.children.push(declNode);
+  }
+  
+  if (statements.length > 0) {
+    const stmtNode = createNode('statements', 'Statements', 'keyword', statements);
+    programNode.children.push(stmtNode);
   }
   
   return programNode;
 }
 
 function parseStatement(statement: string, language: string): ASTNode | null {
+  // Variable declaration (int a = 5, float b, etc.)
+  if (isVariableDeclaration(statement, language)) {
+    return parseVariableDeclaration(statement, language);
+  }
+  
   // Function declaration
-  if (statement.includes('(') && statement.includes(')') && !statement.includes('=')) {
+  if (isFunctionDeclaration(statement)) {
     return parseFunctionDeclaration(statement, language);
+  }
+  
+  // Control structures
+  if (statement.startsWith('if')) {
+    return parseIfStatement(statement);
+  }
+  
+  if (statement.startsWith('while')) {
+    return parseWhileStatement(statement);
+  }
+  
+  if (statement.startsWith('for')) {
+    return parseForStatement(statement);
   }
   
   // Return statement
@@ -185,36 +236,143 @@ function parseStatement(statement: string, language: string): ASTNode | null {
     return parseReturnStatement(statement);
   }
   
-  // If statement
-  if (statement.startsWith('if')) {
-    return parseIfStatement(statement);
-  }
-  
-  // Assignment
-  if (statement.includes('=') && !statement.includes('==')) {
+  // Assignment (variable = expression)
+  if (statement.includes('=') && !statement.includes('==') && !isVariableDeclaration(statement, language)) {
     return parseAssignment(statement);
   }
   
-  // Default expression
-  return createNode('statement', statement, 'identifier', []);
+  // Expression statement
+  return parseExpressionStatement(statement);
+}
+
+function isVariableDeclaration(statement: string, language: string): boolean {
+  const declKeywords = ['int', 'float', 'double', 'char', 'void', 'bool', 'string'];
+  const firstWord = statement.trim().split(/\s+/)[0];
+  return declKeywords.includes(firstWord.toLowerCase());
+}
+
+function isFunctionDeclaration(statement: string): boolean {
+  return statement.includes('(') && statement.includes(')') && 
+         (statement.includes('{') || statement.endsWith(')') || statement.endsWith(';'));
+}
+
+function parseVariableDeclaration(statement: string, language: string): ASTNode {
+  const cleanStmt = statement.replace(';', '').trim();
+  const parts = cleanStmt.split('=');
+  const leftPart = parts[0].trim();
+  const rightPart = parts[1]?.trim();
+  
+  // Parse type and variable name
+  const leftTokens = leftPart.split(/\s+/);
+  const type = leftTokens[0];
+  const varName = leftTokens[leftTokens.length - 1];
+  
+  const declNode = createNode('variable_declaration', `${type} ${varName}`, 'keyword', []);
+  declNode.children.push(createNode('keyword', type, 'keyword', []));
+  declNode.children.push(createNode('identifier', varName, 'identifier', []));
+  
+  if (rightPart) {
+    const initNode = createNode('assignment', '=', 'operator', []);
+    initNode.children.push(createNode('identifier', varName, 'identifier', []));
+    
+    // Parse the right-hand side as expression
+    const valueNode = parseExpressionRecursive(rightPart);
+    initNode.children.push(valueNode);
+    
+    declNode.children.push(initNode);
+  }
+  
+  return declNode;
 }
 
 function parseFunctionDeclaration(statement: string, language: string): ASTNode {
   const parts = statement.split('(');
-  const functionName = parts[0].trim().split(' ').pop() || 'function';
-  const parameters = parts[1]?.split(')')[0] || '';
+  const leftPart = parts[0].trim();
+  const paramsPart = parts[1]?.split(')')[0] || '';
   
-  const functionNode = createNode('function', functionName, 'identifier', []);
+  // Extract return type and function name
+  const leftTokens = leftPart.split(/\s+/);
+  const returnType = leftTokens.length > 1 ? leftTokens[0] : 'void';
+  const functionName = leftTokens[leftTokens.length - 1];
   
-  if (parameters.trim()) {
-    const paramList = parameters.split(',').map(p => p.trim());
+  const functionNode = createNode('function_declaration', `Function: ${functionName}`, 'keyword', []);
+  
+  // Add return type
+  if (returnType !== 'void') {
+    functionNode.children.push(createNode('keyword', returnType, 'keyword', []));
+  }
+  
+  // Add function name
+  functionNode.children.push(createNode('identifier', functionName, 'identifier', []));
+  
+  // Add parameters
+  if (paramsPart.trim()) {
+    const paramListNode = createNode('parameter_list', 'Parameters', 'keyword', []);
+    const paramList = paramsPart.split(',').map(p => p.trim());
+    
     for (const param of paramList) {
-      const paramNode = createNode('identifier', param, 'identifier', []);
-      functionNode.children.push(paramNode);
+      const paramTokens = param.split(/\s+/);
+      if (paramTokens.length >= 2) {
+        const paramType = paramTokens[0];
+        const paramName = paramTokens[1];
+        const paramNode = createNode('declaration', `${paramType} ${paramName}`, 'identifier', []);
+        paramNode.children.push(createNode('keyword', paramType, 'keyword', []));
+        paramNode.children.push(createNode('identifier', paramName, 'identifier', []));
+        paramListNode.children.push(paramNode);
+      }
+    }
+    
+    if (paramListNode.children.length > 0) {
+      functionNode.children.push(paramListNode);
     }
   }
   
   return functionNode;
+}
+
+function parseWhileStatement(statement: string): ASTNode {
+  const condition = statement.match(/while\s*\((.*?)\)/)?.[1] || '';
+  const whileNode = createNode('while_statement', 'while', 'keyword', []);
+  
+  if (condition) {
+    const conditionNode = parseExpressionRecursive(condition);
+    whileNode.children.push(conditionNode);
+  }
+  
+  return whileNode;
+}
+
+function parseForStatement(statement: string): ASTNode {
+  const forContent = statement.match(/for\s*\((.*?)\)/)?.[1] || '';
+  const forNode = createNode('for_statement', 'for', 'keyword', []);
+  
+  if (forContent) {
+    const parts = forContent.split(';').map(p => p.trim());
+    if (parts.length >= 3) {
+      // Initialization
+      if (parts[0]) {
+        const initNode = createNode('statement', 'Init', 'keyword', []);
+        initNode.children.push(parseExpressionRecursive(parts[0]));
+        forNode.children.push(initNode);
+      }
+      
+      // Condition
+      if (parts[1]) {
+        const condNode = createNode('statement', 'Condition', 'keyword', []);
+        condNode.children.push(parseExpressionRecursive(parts[1]));
+        forNode.children.push(condNode);
+      }
+      
+      // Update
+      if (parts[2]) {
+        const updateNode = createNode('statement', 'Update', 'keyword', []);
+        updateNode.children.push(parseExpressionRecursive(parts[2]));
+        forNode.children.push(updateNode);
+      }
+    }
+  }
+  
+  return forNode;
 }
 
 function parseReturnStatement(statement: string): ASTNode {
@@ -222,7 +380,7 @@ function parseReturnStatement(statement: string): ASTNode {
   const returnNode = createNode('return_statement', 'return', 'keyword', []);
   
   if (returnValue) {
-    const valueNode = parseExpression(returnValue);
+    const valueNode = parseExpressionRecursive(returnValue);
     returnNode.children.push(valueNode);
   }
   
@@ -234,7 +392,7 @@ function parseIfStatement(statement: string): ASTNode {
   const ifNode = createNode('if_statement', 'if', 'keyword', []);
   
   if (condition) {
-    const conditionNode = parseExpression(condition);
+    const conditionNode = parseExpressionRecursive(condition);
     ifNode.children.push(conditionNode);
   }
   
@@ -250,13 +408,196 @@ function parseAssignment(statement: string): ASTNode {
   assignNode.children.push(createNode('identifier', variable, 'identifier', []));
   
   if (value) {
-    const valueNode = /^\d+(\.\d+)?$/.test(value) 
-      ? createNode('constant', value, 'constant', [])
-      : createNode('identifier', value, 'identifier', []);
+    const valueNode = parseExpressionRecursive(value);
     assignNode.children.push(valueNode);
   }
   
   return assignNode;
+}
+
+function parseExpressionStatement(statement: string): ASTNode {
+  const cleanStmt = statement.replace(';', '').trim();
+  return parseExpressionRecursive(cleanStmt);
+}
+
+// Enhanced expression parser with proper operator precedence
+function parseExpressionRecursive(input: string): ASTNode {
+  const tokens = tokenizeExpression(input);
+  let index = 0;
+  
+  function peek(): string | null {
+    return index < tokens.length ? tokens[index] : null;
+  }
+  
+  function consume(): string | null {
+    return index < tokens.length ? tokens[index++] : null;
+  }
+  
+  // Parse logical OR (lowest precedence)
+  function parseLogicalOr(): ASTNode {
+    let left = parseLogicalAnd();
+    
+    while (peek() === '||') {
+      const operator = consume()!;
+      const right = parseLogicalAnd();
+      const opNode = createNode('binary_op', operator, 'operator', []);
+      opNode.children.push(left);
+      opNode.children.push(right);
+      left = opNode;
+    }
+    
+    return left;
+  }
+  
+  // Parse logical AND
+  function parseLogicalAnd(): ASTNode {
+    let left = parseEquality();
+    
+    while (peek() === '&&') {
+      const operator = consume()!;
+      const right = parseEquality();
+      const opNode = createNode('binary_op', operator, 'operator', []);
+      opNode.children.push(left);
+      opNode.children.push(right);
+      left = opNode;
+    }
+    
+    return left;
+  }
+  
+  // Parse equality (==, !=)
+  function parseEquality(): ASTNode {
+    let left = parseComparison();
+    
+    while (peek() === '==' || peek() === '!=') {
+      const operator = consume()!;
+      const right = parseComparison();
+      const opNode = createNode('binary_op', operator, 'operator', []);
+      opNode.children.push(left);
+      opNode.children.push(right);
+      left = opNode;
+    }
+    
+    return left;
+  }
+  
+  // Parse comparison (<, >, <=, >=)
+  function parseComparison(): ASTNode {
+    let left = parseAddSub();
+    
+    while (peek() === '<' || peek() === '>' || peek() === '<=' || peek() === '>=') {
+      const operator = consume()!;
+      const right = parseAddSub();
+      const opNode = createNode('binary_op', operator, 'operator', []);
+      opNode.children.push(left);
+      opNode.children.push(right);
+      left = opNode;
+    }
+    
+    return left;
+  }
+  
+  // Parse addition and subtraction
+  function parseAddSub(): ASTNode {
+    let left = parseMulDiv();
+    
+    while (peek() === '+' || peek() === '-') {
+      const operator = consume()!;
+      const right = parseMulDiv();
+      const opNode = createNode('binary_op', operator, 'operator', []);
+      opNode.children.push(left);
+      opNode.children.push(right);
+      left = opNode;
+    }
+    
+    return left;
+  }
+  
+  // Parse multiplication and division
+  function parseMulDiv(): ASTNode {
+    let left = parseUnary();
+    
+    while (peek() === '*' || peek() === '/' || peek() === '%') {
+      const operator = consume()!;
+      const right = parseUnary();
+      const opNode = createNode('binary_op', operator, 'operator', []);
+      opNode.children.push(left);
+      opNode.children.push(right);
+      left = opNode;
+    }
+    
+    return left;
+  }
+  
+  // Parse unary expressions
+  function parseUnary(): ASTNode {
+    if (peek() === '-' || peek() === '!' || peek() === '++' || peek() === '--') {
+      const operator = consume()!;
+      const operand = parseUnary();
+      const unaryNode = createNode('unary_op', operator, 'operator', []);
+      unaryNode.children.push(operand);
+      return unaryNode;
+    }
+    
+    return parsePrimary();
+  }
+  
+  // Parse primary expressions
+  function parsePrimary(): ASTNode {
+    const token = peek();
+    if (!token) {
+      return createNode('identifier', '', 'identifier', []);
+    }
+    
+    // Parentheses
+    if (token === '(') {
+      consume(); // consume '('
+      const expr = parseLogicalOr();
+      consume(); // consume ')'
+      return expr;
+    }
+    
+    // Numbers
+    if (/^\d+(\.\d+)?$/.test(token)) {
+      consume();
+      return createNode('constant', token, 'constant', []);
+    }
+    
+    // String literals
+    if (/^["'].*["']$/.test(token)) {
+      consume();
+      return createNode('constant', token, 'constant', []);
+    }
+    
+    // Identifiers and function calls
+    if (/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(token)) {
+      consume();
+      
+      // Check for function call
+      if (peek() === '(') {
+        consume(); // consume '('
+        const callNode = createNode('call_expression', token, 'identifier', []);
+        
+        // Parse arguments
+        while (peek() && peek() !== ')') {
+          const arg = parseLogicalOr();
+          callNode.children.push(arg);
+          if (peek() === ',') consume();
+        }
+        consume(); // consume ')'
+        
+        return callNode;
+      }
+      
+      return createNode('identifier', token, 'identifier', []);
+    }
+    
+    // Default fallback
+    consume();
+    return createNode('identifier', token, 'identifier', []);
+  }
+  
+  return parseLogicalOr();
 }
 
 function createNode(type: NodeType, value: string, tokenType: 'keyword' | 'operator' | 'identifier' | 'constant', children: ASTNode[]): ASTNode {
