@@ -15,10 +15,10 @@ export interface ASTNode {
 }
 
 // Token classification
-const keywords = ['int', 'float', 'double', 'char', 'void', 'if', 'else', 'while', 'for', 'return', 
+const keywords = ['if', 'while', 'return', 'goto', 'for', 'int', 'float', 'char', 'double', 'void', 
+                 'else', 'do', 'switch', 'case', 'break', 'continue', 'struct', 'typedef', 
                  'def', 'class', 'public', 'private', 'static', 'import', 'from', 'as'];
-const operators = ['+', '-', '*', '/', '=', '==', '!=', '<', '>', '<=', '>=', '&&', '||', '!', 
-                  '%', '++', '--', '+=', '-=', '*=', '/=', '(', ')', '{', '}', '[', ']', ';', ','];
+const operators = ['{', '}', '[', ']', '!', '+', '-', '=', '*', ';', ':', '(', ')', ','];
 
 function getTokenType(token: string): 'keyword' | 'operator' | 'identifier' | 'constant' {
   if (keywords.includes(token.toLowerCase())) return 'keyword';
