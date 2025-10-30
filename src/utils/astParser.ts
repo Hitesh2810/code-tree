@@ -21,7 +21,7 @@ const keywords = [
   'private', 'static', 'import', 'from', 'as'
 ];
 
-// Treat these as "constant kinds" (data types)
+// Data types are constants, not keywords
 const constantKinds = ['int', 'float', 'double', 'char', 'string', 'void', 'bool'];
 
 const operators = [
