@@ -15,18 +15,38 @@ export interface ASTNode {
 }
 
 // Token classification
-const keywords = ['if', 'while', 'return', 'goto', 'for', 'int', 'float', 'char', 'double', 'void', 
-                 'else', 'do', 'switch', 'case', 'break', 'continue', 'struct', 'typedef', 
-                 'def', 'class', 'public', 'private', 'static', 'import', 'from', 'as'];
-const operators = ['{', '}', '[', ']', '!', '+', '-', '=', '*', ';', ':', '(', ')', ','];
+const keywords = [
+  'if', 'else', 'while', 'for', 'return', 'goto', 'do', 'switch', 'case',
+  'break', 'continue', 'struct', 'typedef', 'def', 'class', 'public',
+  'private', 'static', 'import', 'from', 'as'
+];
 
+// Treat these as "constant kinds" (data types)
+const constantKinds = ['int', 'float', 'double', 'char', 'string', 'void', 'bool'];
+
+const operators = [
+  '{', '}', '[', ']', '(', ')', '!', '+', '-', '*', '/', '%', '=', '==',
+  '!=', '<', '>', '<=', '>=', ';', ':', ',', '.', '++', '--'
+];
+
+// Improved token classifier (compiler-style + AST-style hybrid)
 function getTokenType(token: string): 'keyword' | 'operator' | 'identifier' | 'constant' {
-  if (keywords.includes(token.toLowerCase())) return 'keyword';
+  const lower = token.toLowerCase();
+
+  if (keywords.includes(lower)) return 'keyword';
+  if (constantKinds.includes(lower)) return 'constant'; // type constants like int, float
   if (operators.includes(token)) return 'operator';
+
+  // Numeric literals (int/float)
   if (/^\d+(\.\d+)?$/.test(token)) return 'constant';
+
+  // String or character literals
   if (/^".*"$/.test(token) || /^'.*'$/.test(token)) return 'constant';
+
+  // Default fallback → identifier
   return 'identifier';
 }
+
 
 let nodeIdCounter = 0;
 function generateNodeId(): string {
