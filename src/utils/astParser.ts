@@ -29,9 +29,9 @@ const operators = [
 // Improved token classifier (compiler-style + AST-style hybrid)
 function getTokenType(token: string): 'keyword' | 'operator' | 'identifier' | 'constant' {
   const lower = token.toLowerCase();
-
+  if (constantKinds.includes(lower)) return 'constant';
   if (keywords.includes(lower)) return 'keyword';
-  if (constantKinds.includes(lower)) return 'constant'; // type constants like int, float
+  // type constants like int, float
   if (operators.includes(token)) return 'operator';
 
   // Numeric literals (int/float)
