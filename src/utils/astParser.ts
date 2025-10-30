@@ -14,16 +14,13 @@ export interface ASTNode {
   position: { x: number; y: number };
 }
 
-// Token classification
-const keywords = [
-  'if', 'else', 'while', 'for', 'return', 'goto', 'do', 'switch', 'case',
-  'break', 'continue', 'struct', 'typedef', 'def', 'class', 'public',
-  'private', 'static', 'import', 'from', 'as'
-];
+// Token classification - Only control flow keywords
+const keywords = ['if', 'while', 'return', 'goto'];
 
-// Data types are constants, not keywords
+// Data types are constants (orange), not keywords
 const constantKinds = ['int', 'float', 'double', 'char', 'string', 'void', 'bool'];
 
+// All operators including braces (red)
 const operators = [
   '{', '}', '[', ']', '(', ')', '!', '+', '-', '*', '/', '%', '=', '==',
   '!=', '<', '>', '<=', '>=', ';', ':', ',', '.', '++', '--'
