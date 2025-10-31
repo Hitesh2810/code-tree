@@ -59,8 +59,8 @@ export const ASTVisualization = ({ astData, isLoading = false }: ASTVisualizatio
         .y(d => d.y + margin.top))
       .style("fill", "none")
       .style("stroke", "#000000")
-      .style("stroke-width", 3)
-      .style("stroke-opacity", 1);
+      .style("stroke-width", 2)
+      .style("stroke-opacity", 0.6);
 
     // Add nodes
     const nodes = g.selectAll(".node")
@@ -75,9 +75,9 @@ export const ASTVisualization = ({ astData, isLoading = false }: ASTVisualizatio
     nodes.append("circle")
       .attr("r", 8)
       .style("fill", d => nodeColors[d.data.tokenType])
-      .style("stroke", "#000000")
-      .style("stroke-width", 3)
-      .style("stroke-opacity", 1)
+      .style("stroke", "hsl(var(--foreground))")
+      .style("stroke-width", 2)
+      .style("stroke-opacity", 0.8)
       .on("mouseover", function(event, d) {
         d3.select(this)
           .transition()
