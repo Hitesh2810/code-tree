@@ -58,7 +58,7 @@ export const ASTVisualization = ({ astData, isLoading = false }: ASTVisualizatio
         .x(d => d.x + margin.left)
         .y(d => d.y + margin.top))
       .style("fill", "none")
-      .style("stroke", "#000000")
+      .style("stroke", "hsl(var(--border))")
       .style("stroke-width", 2)
       .style("stroke-opacity", 0.6);
 
